@@ -1,0 +1,22 @@
+
+services:
+  api:
+    image: israelhikingmap/graphhopper
+      #ports:
+      #- "8989:8989"
+    restart: unless-stopped
+    volumes:
+      - ./graph-cache:/data/default-gh
+      - ./logs:/graphhopper/logs
+      - ./downloaded.pbf:/graphhopper/data.pbf
+      - ./config.yml:/graphhopper/config-example.yml
+    command: --host 0.0.0.0
+    networks:
+      - default
+      - proxy
+networks:
+  default:
+    driver: bridge
+  proxy:
+    name: reverse_proxy
+    external: true
