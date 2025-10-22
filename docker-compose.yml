@@ -8,7 +8,7 @@ services:
     volumes:
       - ./graph-cache:/data/default-gh
       - ./logs:/graphhopper/logs
-      - ./downloaded.pbf:/graphhopper/data.pbf
+      - ./maps:/graphhopper/maps
       - ./config.yml:/graphhopper/config-example.yml
     command: --host 0.0.0.0
     networks:
