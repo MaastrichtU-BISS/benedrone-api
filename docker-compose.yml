@@ -4,11 +4,12 @@ services:
     image: israelhikingmap/graphhopper
       #ports:
       #- "8989:8989"
-    restart: unless-stopped
+    # restart: unless-stopped
     volumes:
       - ./graph-cache:/data/default-gh
       - ./logs:/graphhopper/logs
-      - ./maps:/graphhopper/maps
+      - ./maps/nl.osm.pbf:/graphhopper/data.pbf
+      - ./nfz:/graphhopper/nfz
       - ./config.yml:/graphhopper/config-example.yml
     command: --host 0.0.0.0
     networks:

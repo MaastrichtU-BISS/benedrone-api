@@ -23,3 +23,8 @@ docker compose logs -f api
 ```
 
 To stop real-time monitoring of logs in the last command, type ctrl+c
+
+
+## To run the jar buil
+java -jar graphhopper-web-11.0.jar server config.yml
+
