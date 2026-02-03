@@ -1,3 +1,3 @@
-maps/
-graph-cache/
-logs/
+graph-cache
+maps
+logs
