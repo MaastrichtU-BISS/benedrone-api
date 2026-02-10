@@ -1,3 +1,5 @@
 graph-cache
-maps
+maps/bene.osm.pbf
 logs
+scripts/waterways.geojson
+scripts/waterways.osm.pbf
