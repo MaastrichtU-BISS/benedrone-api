@@ -24,6 +24,18 @@ type RouteRequest struct {
 	To   Coordinate `json:"to"`
 }
 
+// RouteResult represents the combined route data
+type RouteResult struct {
+	ID            string                 `json:"id"`
+	From          Coordinate             `json:"from"`
+	To            Coordinate             `json:"to"`
+	Distance      float64                `json:"distance_meters"`
+	Time          float64                `json:"time_seconds"`
+	Points        [][]float64            `json:"points"`
+	RouteResponse map[string]interface{} `json:"route_response"`
+	Error         string                 `json:"error,omitempty"`
+}
+
 // GeoJSONPoint represents a GeoJSON Feature with Point geometry
 type GeoJSONPoint struct {
 	Type       string                 `json:"type"`
@@ -40,15 +52,34 @@ type GeoJSONFeatureCollection struct {
 	Features []GeoJSONPoint `json:"features"`
 }
 
-// RouteResult represents the combined route data
-type RouteResult struct {
-	ID            string                 `json:"id"`
-	From          Coordinate             `json:"from"`
-	To            Coordinate             `json:"to"`
-	Distance      float64                `json:"distance_meters"`
-	Time          float64                `json:"time_seconds"`
-	RouteResponse map[string]interface{} `json:"route_response"`
-	Error         string                 `json:"error,omitempty"`
+// LineStringGeometry represents a LineString geometry
+type LineStringGeometry struct {
+	Type        string      `json:"type"`
+	Coordinates [][]float64 `json:"coordinates"`
+}
+
+// LineStringProperties represents properties for a LineString feature
+type LineStringProperties struct {
+	FromLat            float64 `json:"from_lat"`
+	FromLon            float64 `json:"from_lon"`
+	ToLat              float64 `json:"to_lat"`
+	ToLon              float64 `json:"to_lon"`
+	PairID             string  `json:"pair_id"`
+	DistanceKilometers float64 `json:"distance_kilometers"`
+	DurationMinutes    float64 `json:"duration_minutes"`
+}
+
+// LineStringFeature represents a LineString feature
+type LineStringFeature struct {
+	Type       string               `json:"type"`
+	Properties LineStringProperties `json:"properties"`
+	Geometry   LineStringGeometry   `json:"geometry"`
+}
+
+// LineStringCollection represents a FeatureCollection of LineStrings
+type LineStringCollection struct {
+	Type     string              `json:"type"`
+	Features []LineStringFeature `json:"features"`
 }
 
 const (
@@ -58,7 +89,7 @@ const (
 
 func main() {
 	// Read coordinates from GeoJSON file
-	coordinates, err := readGeoJSON("input/Coordinates_for_routes.geojson")
+	coordinates, err := readGeoJSON("input/points.geojson")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading coordinates: %v\n", err)
 		os.Exit(1)
@@ -80,13 +111,21 @@ func main() {
 		}
 	}
 
-	// Write results to JSON file
-	if err := writeResults("output/route_results.json", results); err != nil {
-		fmt.Fprintf(os.Stderr, "Error writing results: %v\n", err)
+	// Augment input GeoJSON with distance and duration
+	if err := augmentGeoJSON("input/points.geojson", "output/points.geojson", results); err != nil {
+		fmt.Fprintf(os.Stderr, "Error augmenting GeoJSON: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("Successfully processed %d routes. Results saved to output/route_results.json\n", len(results))
+	// Create LineStrings for routes
+	if err := createRouteLineStrings("output/paths.geojson", results); err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating route linestrings: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Successfully processed %d routes.\n", len(results))
+	fmt.Printf("Augmented GeoJSON saved to output/points.geojson\n")
+	fmt.Printf("Route LineStrings saved to output/paths.geojson\n")
 }
 
 func readGeoJSON(filename string) ([]RouteRequest, error) {
@@ -203,7 +242,7 @@ func processRoute(req RouteRequest) RouteResult {
 		return result
 	}
 
-	// Extract distance and time from the first path
+	// Extract distance, time, and points from the first path
 	if paths, ok := routeData["paths"].([]interface{}); ok && len(paths) > 0 {
 		if path, ok := paths[0].(map[string]interface{}); ok {
 			if distance, ok := path["distance"].(float64); ok {
@@ -211,6 +250,20 @@ func processRoute(req RouteRequest) RouteResult {
 			}
 			if timeMs, ok := path["time"].(float64); ok {
 				result.Time = timeMs / 1000.0 // Convert milliseconds to seconds
+			}
+			// Extract points from the path
+			if pointsData, ok := path["points"].(map[string]interface{}); ok {
+				if coordinates, ok := pointsData["coordinates"].([]interface{}); ok {
+					for _, coord := range coordinates {
+						if coordArray, ok := coord.([]interface{}); ok && len(coordArray) >= 2 {
+							if lon, ok := coordArray[0].(float64); ok {
+								if lat, ok := coordArray[1].(float64); ok {
+									result.Points = append(result.Points, []float64{lon, lat})
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 	}
@@ -230,13 +283,105 @@ func buildGraphHopperURL(req RouteRequest) (string, error) {
 	return fmt.Sprintf("%s?%s", graphhopperURL, params.Encode()), nil
 }
 
-func writeResults(filename string, results []RouteResult) error {
-	data, err := json.MarshalIndent(results, "", "  ")
+func augmentGeoJSON(inputFilename string, outputFilename string, results []RouteResult) error {
+	// Read input GeoJSON
+	data, err := os.ReadFile(inputFilename)
 	if err != nil {
-		return fmt.Errorf("failed to marshal JSON: %w", err)
+		return fmt.Errorf("failed to read input file: %w", err)
 	}
 
-	if err := os.WriteFile(filename, data, 0644); err != nil {
+	var featureCollection GeoJSONFeatureCollection
+	if err := json.Unmarshal(data, &featureCollection); err != nil {
+		return fmt.Errorf("failed to parse input GeoJSON: %w", err)
+	}
+
+	// Create a map of pair_id -> result for quick lookup
+	resultMap := make(map[string]RouteResult)
+	for _, result := range results {
+		if result.Error == "" {
+			resultMap[result.ID] = result
+		}
+	}
+
+	// Augment each feature with distance and duration
+	for i := range featureCollection.Features {
+		feature := &featureCollection.Features[i]
+
+		// Extract pair_id from properties
+		pairID, ok := feature.Properties["pair_id"].(float64)
+		if !ok {
+			continue
+		}
+
+		pairIDStr := fmt.Sprintf("pair_%d", int(pairID))
+		if result, exists := resultMap[pairIDStr]; exists {
+			// Convert distance to kilometers and time to minutes
+			distanceKm := result.Distance / 1000.0
+			durationMinutes := result.Time / 60.0
+
+			// Add new fields to properties
+			feature.Properties["distance_kilometers"] = distanceKm
+			feature.Properties["duration_minutes"] = durationMinutes
+		}
+	}
+
+	// Write augmented GeoJSON to file
+	output, err := json.Marshal(featureCollection)
+	if err != nil {
+		return fmt.Errorf("failed to marshal GeoJSON: %w", err)
+	}
+
+	if err := os.WriteFile(outputFilename, output, 0644); err != nil {
+		return fmt.Errorf("failed to write file: %w", err)
+	}
+
+	return nil
+}
+func createRouteLineStrings(outputFilename string, results []RouteResult) error {
+	var features []LineStringFeature
+
+	for _, result := range results {
+		if result.Error != "" || len(result.Points) == 0 {
+			continue
+		}
+
+		// Convert distance to kilometers and time to minutes
+		distanceKm := result.Distance / 1000.0
+		durationMinutes := result.Time / 60.0
+
+		// Create LineString feature
+		feature := LineStringFeature{
+			Type: "Feature",
+			Properties: LineStringProperties{
+				FromLat:            result.From.Lat,
+				FromLon:            result.From.Lon,
+				ToLat:              result.To.Lat,
+				ToLon:              result.To.Lon,
+				PairID:             result.ID,
+				DistanceKilometers: distanceKm,
+				DurationMinutes:    durationMinutes,
+			},
+			Geometry: LineStringGeometry{
+				Type:        "LineString",
+				Coordinates: result.Points,
+			},
+		}
+		features = append(features, feature)
+	}
+
+	// Create FeatureCollection
+	featureCollection := LineStringCollection{
+		Type:     "FeatureCollection",
+		Features: features,
+	}
+
+	// Write to file
+	output, err := json.Marshal(featureCollection)
+	if err != nil {
+		return fmt.Errorf("failed to marshal GeoJSON: %w", err)
+	}
+
+	if err := os.WriteFile(outputFilename, output, 0644); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
