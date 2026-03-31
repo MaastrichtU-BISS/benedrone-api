@@ -1,6 +1,7 @@
 graph-cache
 maps
 logs
+scripts
 scripts/experiments/input
 scripts/experiments/output
 scripts/experiments/go.mod
