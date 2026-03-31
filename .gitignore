@@ -1,3 +1,5 @@
 graph-cache
 maps
 logs
+scripts/experiments/input
+scripts/experiments/output
