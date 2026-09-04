@@ -11,10 +11,16 @@ services:
     image: israelhikingmap/graphhopper:11.0@sha256:e77e14e48ea69ea7bb0eb71ddc9d583e5ce85dd295475572371f72ed4880a1ff
     command: --host 0.0.0.0
     volumes:
-      # Prebuilt cache. Locally that is ./graph-cache; on the server set
+      # Prebuilt cache. The container path must be /data/default-gh: this image
+      # overrides graph.location, so the graph-cache setting in config.yml is
+      # ignored and mounting anywhere else makes GraphHopper decide the graph is
+      # missing and re-import.
+      #
+      # Locally the source is ./graph-cache; on the server set
       # GRAPH_CACHE_PATH=/data/benedrone/graph-cache, where it was rsynced once.
-      # No .pbf mount: with a valid cache GraphHopper skips the import entirely.
-      - ${GRAPH_CACHE_PATH:-./graph-cache}:/graphhopper/graph-cache
+      # No .pbf mount: with a valid cache the import never runs. Verified against
+      # this exact digest - it loads the cache and routes with no .pbf present.
+      - ${GRAPH_CACHE_PATH:-./graph-cache}:/data/default-gh
       - ./config.yml:/graphhopper/config-example.yml:ro
       - ./logs:/graphhopper/logs
     environment:
