@@ -11,9 +11,10 @@ services:
     image: israelhikingmap/graphhopper:11.0@sha256:e77e14e48ea69ea7bb0eb71ddc9d583e5ce85dd295475572371f72ed4880a1ff
     command: --host 0.0.0.0
     volumes:
-      # Prebuilt cache, rsynced to the host once. No .pbf mount: with a valid
-      # cache GraphHopper skips the import entirely.
-      - /data/benedrone/graph-cache:/graphhopper/graph-cache
+      # Prebuilt cache. Locally that is ./graph-cache; on the server set
+      # GRAPH_CACHE_PATH=/data/benedrone/graph-cache, where it was rsynced once.
+      # No .pbf mount: with a valid cache GraphHopper skips the import entirely.
+      - ${GRAPH_CACHE_PATH:-./graph-cache}:/graphhopper/graph-cache
       - ./config.yml:/graphhopper/config-example.yml:ro
       - ./logs:/graphhopper/logs
     environment:
