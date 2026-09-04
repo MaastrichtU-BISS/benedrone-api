@@ -1,23 +1,38 @@
-
 services:
-  api:
-    image: israelhikingmap/graphhopper
-      #ports:
-      #- "8989:8989"
-    # restart: unless-stopped
-    volumes:
-      - ./graph-cache:/data/default-gh
-      - ./logs:/graphhopper/logs
-      - ./maps/nl.osm.pbf:/graphhopper/data.pbf
-      - ./nfz:/graphhopper/nfz
-      - ./config.yml:/graphhopper/config-example.yml
+  graphhopper:
+    # Pinned to the version that built graph-cache: logs/graphhopper.log records
+    # "version 11.0|2025-10-14T14:28:00Z" for the 2026-07-28 import. A different
+    # GraphHopper release can reject the cache and fall back to importing
+    # datareader.file - a .pbf deliberately not on this host - and crash-loop.
+    #
+    # The digest makes this immutable; a tag alone can be re-pushed (upstream
+    # moved :latest on 2026-06-18). Drop the @sha256 part if you would rather
+    # take rebuilds of 11.0, e.g. for base-image security updates.
+    image: israelhikingmap/graphhopper:11.0@sha256:e77e14e48ea69ea7bb0eb71ddc9d583e5ce85dd295475572371f72ed4880a1ff
     command: --host 0.0.0.0
-    networks:
-      - default
-      - proxy
-networks:
-  default:
-    driver: bridge
-  proxy:
-    name: reverse_proxy
-    external: true
+    volumes:
+      # Prebuilt cache, rsynced to the host once. No .pbf mount: with a valid
+      # cache GraphHopper skips the import entirely.
+      - /data/benedrone/graph-cache:/graphhopper/graph-cache
+      - ./config.yml:/graphhopper/config-example.yml:ro
+      - ./logs:/graphhopper/logs
+    environment:
+      - JAVA_OPTS=-Xmx2g
+      - TZ=Europe/Amsterdam
+    # expose, not ports: reachable from caddy over the compose network only.
+    expose:
+      - "8989"
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      - graphhopper
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    environment:
+      # Set in Coolify's environment for this stack. Never commit the value.
+      - API_TOKEN=${GRAPHHOPPER_TOKEN}
+    ports:
+      - "8080"
+    restart: unless-stopped
