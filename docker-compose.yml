@@ -25,6 +25,15 @@ services:
     # expose, not ports: reachable from caddy over the compose network only.
     expose:
       - "8989"
+    # GraphHopper's own HealthCheckResource. start_period is generous because
+    # the first request has to memory-map a 4.8 GB graph off disk; until it
+    # elapses, failures do not count against retries.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8989/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
     restart: unless-stopped
 
   caddy:
@@ -38,4 +47,13 @@ services:
       - API_TOKEN=${GRAPHHOPPER_TOKEN}
     ports:
       - "8080"
+    # /health is the one route the Caddyfile leaves unauthenticated, and it
+    # proxies through to GraphHopper - so a healthy gate means the whole chain
+    # works, not just that Caddy is listening.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
     restart: unless-stopped
