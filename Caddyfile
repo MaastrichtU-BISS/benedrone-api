@@ -1,0 +1,29 @@
+# Token gate in front of GraphHopper.
+#
+# GraphHopper's open-source server has no authentication of its own - the
+# Dropwizard auth module is not even bundled in the jar - so the check has to
+# live in front of it. Only this container is published; GraphHopper itself is
+# reachable on the internal compose network and nowhere else.
+#
+# Coolify's Traefik terminates TLS and forwards here over plain HTTP.
+{
+	auto_https off
+}
+
+:8080 {
+	# route keeps these in the written order; Caddy otherwise applies its own
+	# directive ordering and the 401 would not reliably precede the proxy.
+	route {
+		# Unauthenticated so Coolify's probe can reach it. Passed through to
+		# GraphHopper's own HealthCheckResource rather than answered here, so a
+		# green check means GraphHopper is up, not merely that Caddy is.
+		handle /health {
+			reverse_proxy graphhopper:8989
+		}
+
+		@anon not header X-API-Key "{env.API_TOKEN}"
+		respond @anon "unauthorized" 401
+
+		reverse_proxy graphhopper:8989
+	}
+}
