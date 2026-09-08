@@ -21,7 +21,13 @@ services:
       # No .pbf mount: with a valid cache the import never runs. Verified against
       # this exact digest - it loads the cache and routes with no .pbf present.
       - ${GRAPH_CACHE_PATH:-./graph-cache}:/data/default-gh
-      - ./config.yml:/graphhopper/config-example.yml:ro
+      # Coolify rewrites RELATIVE bind mounts into its own managed storage
+      # directory rather than the repo clone, so ./config.yml resolves to a path
+      # that does not exist, Docker creates it as a directory, and the container
+      # fails with "Are you trying to mount a directory onto a file". Absolute
+      # paths pass through untouched - set GH_CONFIG_PATH on the server.
+      - ${GH_CONFIG_PATH:-./config.yml}:/graphhopper/config-example.yml:ro
+      # A directory is the correct type here, so the same rewrite is harmless.
       - ./logs:/graphhopper/logs
     environment:
       - JAVA_OPTS=-Xmx2g
@@ -36,7 +42,8 @@ services:
     depends_on:
       - graphhopper
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Absolute for the same reason as GH_CONFIG_PATH above.
+      - ${CADDYFILE_PATH:-./Caddyfile}:/etc/caddy/Caddyfile:ro
     environment:
       # Set in Coolify's environment for this stack. Never commit the value.
       - API_TOKEN=${GRAPHHOPPER_TOKEN}
