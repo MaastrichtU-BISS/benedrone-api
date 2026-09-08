@@ -1,0 +1,12 @@
+# GraphHopper with our config baked in.
+#
+# The config used to be bind-mounted, but Coolify rewrites relative bind mounts
+# into its own managed storage directory instead of the repo clone, so the file
+# was never there and the container failed with "Are you trying to mount a
+# directory onto a file". Baking it in removes the mount, and with it the whole
+# class of problem: the image is built from this repo, where config.yml is
+# guaranteed to exist.
+FROM israelhikingmap/graphhopper:11.0@sha256:e77e14e48ea69ea7bb0eb71ddc9d583e5ce85dd295475572371f72ed4880a1ff
+
+# The path this image reads its configuration from.
+COPY config.yml /graphhopper/config-example.yml
