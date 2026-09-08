@@ -1,34 +1,22 @@
 services:
   graphhopper:
-    # Pinned to the version that built graph-cache: logs/graphhopper.log records
-    # "version 11.0|2025-10-14T14:28:00Z" for the 2026-07-28 import. A different
-    # GraphHopper release can reject the cache and fall back to importing
-    # datareader.file - a .pbf deliberately not on this host - and crash-loop.
-    #
-    # The digest makes this immutable; a tag alone can be re-pushed (upstream
-    # moved :latest on 2026-06-18). Drop the @sha256 part if you would rather
-    # take rebuilds of 11.0, e.g. for base-image security updates.
-    image: israelhikingmap/graphhopper:11.0@sha256:e77e14e48ea69ea7bb0eb71ddc9d583e5ce85dd295475572371f72ed4880a1ff
+    # Built from this repo so config.yml travels inside the image. Pinning lives
+    # in Dockerfile.graphhopper, which fixes the base to the 11.0 digest that
+    # built graph-cache; a different GraphHopper release can reject the cache
+    # and fall back to importing a .pbf that is deliberately not on the server.
+    build:
+      context: .
+      dockerfile: Dockerfile.graphhopper
     command: --host 0.0.0.0
     volumes:
-      # Prebuilt cache. The container path must be /data/default-gh: this image
-      # overrides graph.location, so the graph-cache setting in config.yml is
-      # ignored and mounting anywhere else makes GraphHopper decide the graph is
-      # missing and re-import.
+      # The one remaining mount. A directory at an absolute path, which Coolify
+      # passes through untouched - set GRAPH_CACHE_PATH on the server to where
+      # the cache was uploaded. Locally it defaults to ./graph-cache.
       #
-      # Locally the source is ./graph-cache; on the server set
-      # GRAPH_CACHE_PATH=/data/benedrone/graph-cache, where it was rsynced once.
-      # No .pbf mount: with a valid cache the import never runs. Verified against
-      # this exact digest - it loads the cache and routes with no .pbf present.
+      # Container path must be /data/default-gh: this image overrides
+      # graph.location, so the graph-cache value in config.yml is ignored and
+      # mounting anywhere else makes GraphHopper re-import.
       - ${GRAPH_CACHE_PATH:-./graph-cache}:/data/default-gh
-      # Coolify rewrites RELATIVE bind mounts into its own managed storage
-      # directory rather than the repo clone, so ./config.yml resolves to a path
-      # that does not exist, Docker creates it as a directory, and the container
-      # fails with "Are you trying to mount a directory onto a file". Absolute
-      # paths pass through untouched - set GH_CONFIG_PATH on the server.
-      - ${GH_CONFIG_PATH:-./config.yml}:/graphhopper/config-example.yml:ro
-      # A directory is the correct type here, so the same rewrite is harmless.
-      - ./logs:/graphhopper/logs
     environment:
       - JAVA_OPTS=-Xmx2g
       - TZ=Europe/Amsterdam
@@ -38,12 +26,11 @@ services:
     restart: unless-stopped
 
   caddy:
-    image: caddy:2-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
     depends_on:
       - graphhopper
-    volumes:
-      # Absolute for the same reason as GH_CONFIG_PATH above.
-      - ${CADDYFILE_PATH:-./Caddyfile}:/etc/caddy/Caddyfile:ro
     environment:
       # Set in Coolify's environment for this stack. Never commit the value.
       - API_TOKEN=${GRAPHHOPPER_TOKEN}

@@ -1,0 +1,5 @@
+# The token gate, with the Caddyfile baked in - same reasoning as
+# Dockerfile.graphhopper: no bind mount, nothing for Coolify to rewrite.
+FROM caddy:2-alpine
+
+COPY Caddyfile /etc/caddy/Caddyfile
