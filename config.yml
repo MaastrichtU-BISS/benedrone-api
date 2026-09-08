@@ -1,6 +1,6 @@
 graphhopper:
   # OpenStreetMap input file PBF or XML, can be changed via command line -Ddw.graphhopper.datareader.file=some.pbf
-  datareader.file: "maps/bene.osm.pbf"
+  datareader.file: "maps/benege.osm.pbf"
   # Local folder used by graphhopper to store its data
   graph.location: graph-cache
 
@@ -214,7 +214,9 @@ graphhopper:
   import.osm.ignored_highways:
 
   # configure the memory access, use RAM_STORE for well equipped servers (default and recommended)
-  graph.dataaccess.default_type: RAM_STORE
+  # switched to MMAP: RAM_STORE keeps the whole graph on the JVM heap, which stopped fitting
+  # once the Germany extract was added (16GB machine, default 4GB heap, ~640M combined nodes)
+  graph.dataaccess.default_type: MMAP
 
   # will write way names in the preferred language (language code as defined in ISO 639-1 or ISO 639-2):
   # datareader.preferred_language: en
