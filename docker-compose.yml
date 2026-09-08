@@ -22,9 +22,11 @@ services:
     environment:
       - JAVA_OPTS=-Xmx2g
       - TZ=Europe/Amsterdam
-    # expose, not ports: reachable from caddy over the compose network only.
-    expose:
-      - "8989"
+    # No ports and no expose. Containers on the same compose network reach
+    # each other on any port regardless, so caddy still proxies to 8989 - but
+    # Coolify treats a service with declared ports as web-facing and generates
+    # a domain for it, which Traefik then routes straight here, bypassing the
+    # token gate entirely. Declaring nothing keeps this container private.
     # GraphHopper's own HealthCheckResource. start_period is generous because
     # the first request has to memory-map a 4.8 GB graph off disk; until it
     # elapses, failures do not count against retries.
