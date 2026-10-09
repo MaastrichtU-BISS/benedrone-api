@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-INPUT="../maps/bene.osm.pbf"
+INPUT="../maps/benege.osm.pbf"
 TMP="waterways.osm.pbf"
 OUTPUT="waterways.geojson"
 

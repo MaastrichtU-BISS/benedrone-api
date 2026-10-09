@@ -1,5 +1,7 @@
+maps/
 graph-cache
-maps/bene.osm.pbf
 logs
 scripts/waterways.geojson
 scripts/waterways.osm.pbf
+.DS_Store
+.vscode/
